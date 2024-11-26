@@ -1,0 +1,5 @@
+# 忽略整个 data 文件夹
+data/
+
+# 忽略 plots 文件夹中的所有 .png 文件
+plots/*.png
