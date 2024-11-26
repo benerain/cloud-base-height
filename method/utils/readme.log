@@ -1,0 +1,354 @@
+
+# utils.py
+
+Start
+ |
+ |-- Initialize parameters
+ |
+ |-- Create CloudBaseHeightPrediction instance
+ |
+ |-- Run run_cbh()
+      |
+      |-- sample_tiles()
+      |     |
+      |     |-- sample_tiles_swath()
+      |           |
+      |           |-- get_channels_cloud_mask()
+      |           |     |-- read_channel()
+      |           |     |-- fill_in_values()
+      |           |
+      |           |-- extract_cloudy_tiles_swath()
+      |           |     |-- get_tile_offsets()
+      |           |     |-- get_sampling_mask()
+      |           |
+      |           |-- save_tiles_nc()
+      |                 |-- setup_xarray_tile()
+      |
+      |-- predict_cbh()
+            |
+            |-- tile_predict_cbh()
+                  |
+                  |-- encoding_tiles()
+                  |     |-- load_data_tiles()
+                  |     |     |-- load_means_stds()
+                  |     |
+                  |     |-- load_ae_model()
+                  |
+                  |-- predicting_cbh_or()
+                        |-- load()
+
+
+1 数据预处理和瓦片采样
+sample_tiles_swath()：从卫星条带文件中采样瓦片（tiles）
+
+    get_channels_cloud_mask()：读取卫星数据文件，提取云属性通道和云掩码
+        调用：
+        read_channel()：读取特定的云属性通道数据
+        fill_in_values()：填充缺失值或无效值
+
+    extract_cloudy_tiles_swath()：从云属性数据中提取符合云量阈值的瓦片
+        调用：
+        get_tile_offsets()：计算瓦片的偏移量
+        get_sampling_mask()：生成采样掩码，避免在边缘区域采样
+
+    save_tiles_nc()：将提取的瓦片保存为 NetCDF 格式
+        调用：
+        setup_xarray_tile()：将瓦片数据组织为 xarray.Dataset 对象，方便保存和处理
+
+2 特征提取
+tile_predict_cbh()：对瓦片进行编码，并预测云底高度
+
+    encoding_tiles()：使用卷积自编码器对瓦片进行编码，提取特征
+
+        load_data_tiles()：加载瓦片数据集，准备输入模型
+        调用：
+            load_means_stds()：加载云属性的均值和标准差，用于数据标准化
+        load_ae_model()：加载预训练的卷积自编码器模型
+    predicting_cbh_or()：使用序数回归模型预测云底高度
+        调用：
+        load()（来自 joblib 库）：加载预训练的序数回归模型
+
+3 方法包装类
+CloudBaseHeightPrediction：封装整个云底高度预测流程的类
+    方法：
+    sample_tiles()：调用 sample_tiles_swath() 进行瓦片采样
+    predict_cbh()：调用 tile_predict_cbh() 进行特征提取和预测
+    run_cbh()：依次执行 sample_tiles() 和 predict_cbh()，完成整个预测流程
+
+
+
+
+
+程序执行流程
+
+以下是程序的执行步骤及函数调用关系：
+
+	1.	初始化参数：设置文件路径、模型路径、采样参数等。
+	2.	创建 CloudBaseHeightPrediction 实例：传入参数字典 parameters。
+	3.	调用 run_cbh() 方法：
+	•	步骤 1：瓦片采样
+            sample_tiles()
+        	    调用 sample_tiles_swath()
+	            	读取数据：get_channels_cloud_mask()
+                    	读取通道数据：read_channel()
+                    	填充缺失值：fill_in_values()
+		            提取瓦片：extract_cloudy_tiles_swath()
+                    	计算偏移量：get_tile_offsets()
+                    	生成采样掩码：get_sampling_mask()
+		            保存瓦片：save_tiles_nc()
+		                设置瓦片数据集：setup_xarray_tile()
+	•	步骤 2：云底高度预测
+	    	predict_cbh()
+            	调用 tile_predict_cbh()
+                	特征提取：encoding_tiles()
+                	    加载数据集：load_data_tiles()
+                    	    加载均值和标准差：load_means_stds()
+                	    加载自编码器模型：load_ae_model()
+                	    进行编码：使用模型对瓦片数据进行编码
+            	预测云底高度：predicting_cbh_or()
+            	    加载序数回归模型：load()
+		            进行预测：使用模型预测云底高度
+	4.	获取预测结果：preds 和 centers，分别是预测的云底高度和瓦片的中心坐标。
+	5.	结果可视化：使用 Matplotlib 和 Cartopy 绘制云底高度的地理分布图。
+
+
+
+
+# models.py
+
+
+│
+├── 卷积层构建函数
+│   ├── conv3_3
+│   ├── conv3_3_transpose
+│
+├── 卷积块
+│   ├── ConvBlock (编码器用)
+│   ├── ConvTransposeBlock (解码器用)
+│
+├── 编码器类
+│   └── Encoder
+│
+├── 解码器类
+│   └── Decoder
+│
+└── 自编码器模型类
+    └── ConvAutoEncoder
+
+
+该脚本定义了模型的架构，包括卷积自编码器的编码器、解码器和整体模型。
+
+主要组成部分：
+
+    卷积层构建函数：
+        conv3_3：定义 3x3 的卷积层。
+        conv3_3_transpose：定义 3x3 的转置卷积层（用于上采样）。
+    卷积块 ConvBlock：
+        包含三个卷积层，每个后接 LeakyReLU 激活函数。
+        最大池化层用于下采样。
+        批归一化层用于稳定训练过程。
+    转置卷积块 ConvTransposeBlock：
+        用于解码器部分，包含上采样层和卷积层，结构与 ConvBlock 类似，但用于上采样。
+    编码器类 Encoder：
+        包含多个 ConvBlock，逐步减少特征图尺寸并增加通道数。
+        最终输出的特征图展平成一维向量，映射到潜在空间维度。
+    解码器类 Decoder：
+        接受潜在空间向量，通过全连接层映射回特征图形状。
+        包含多个 ConvTransposeBlock，逐步增加特征图尺寸并减少通道数。
+        最终恢复到与输入相同的尺寸和通道数。
+    自编码器模型类 ConvAutoEncoder：
+        组合编码器和解码器。
+        定义了 encode 和 decode 方法，分别处理编码和解码过程。
+        在 forward 方法中，实现了完整的自编码器流程。
+
+
+
+
+# pytorch_class.py
+
+│
+├── 辅助函数
+│   ├── read_nc
+│   ├── subscalegrid
+│   └── standardize_channel
+│
+└── 数据集类
+    └── ModisGlobalTilesDataset
+
+该脚本定义了 PyTorch 数据集类，用于加载和预处理瓦片数据。
+
+主要组成部分：
+
+    辅助函数：
+        read_nc：读取 NetCDF 文件，返回 xarray.Dataset 对象。
+        subscalegrid：对数据进行裁剪，缩小网格尺寸。
+        standardize_channel：对云属性通道进行标准化处理。
+    数据集类 ModisGlobalTilesDataset：
+        继承自 torch.utils.data.Dataset。
+        实现了 __init__、__len__ 和 __getitem__ 方法。
+        在 __getitem__ 方法中：
+            读取瓦片文件，提取云属性数据和云掩码。
+            根据需要对数据进行裁剪和标准化。
+            返回包含数据、云掩码、瓦片中心坐标等信息的样本字典。
+
+
+
+
+
+
+1. 卷积自编码器（Convolutional Autoencoder）
+
+卷积自编码器是一种无监督的神经网络模型，主要用于学习输入数据的低维特征表示。它由两个部分组成：
+
+	•	编码器（Encoder）：将高维输入数据编码为低维的潜在空间（latent space）表示。
+	•	解码器（Decoder）：从潜在空间表示重构出原始数据。
+
+在你的项目中，卷积自编码器用于从云属性瓦片中提取特征，这些特征将用于后续的云底高度预测。
+
+2. 模型架构
+
+	•	输入层：接受尺寸为  (N, 3, 128, 128)  的云属性瓦片，其中  N  是批量大小，3 表示三个云属性通道（云顶高度、云光学厚度、云水路径），
+                                                           128x128 是瓦片的空间尺寸。
+
+
+	•	编码器部分：
+        •	多个卷积块（ConvBlock）：每个卷积块包含三个卷积层，后接 LeakyReLU 激活函数和批归一化层，最后通过最大池化层进行下采样（降维）。
+        •	卷积层参数：卷积核大小为 3x3，步长为 1，填充为 1，确保特征图尺寸在卷积后保持不变。
+        •	潜在空间层：在编码器的末尾，将特征图展平（Flatten），通过全连接层映射到潜在空间维度（例如 256 维）。
+
+    •	解码器部分：
+        •	全连接层：将潜在空间向量映射回特征图的形状。
+        •	多个转置卷积块（ConvTransposeBlock）：每个转置卷积块包含一个上采样层（转置卷积层），三个卷积层，LeakyReLU 激活函数和批归一化层。
+        •	输出层：最后通过一个卷积层，将特征图还原为原始输入的尺寸和通道数。
+
+	•	模型输出：
+        •	编码器输出：潜在空间的特征向量，用于后续的云底高度预测。
+        •	解码器输出：重构的瓦片数据，与输入瓦片进行比较，计算重构误差。
+
+
+
+#  模型训练和预测的流程图.py
+
+
+数据准备：
+1. 从卫星数据中提取云属性瓦片，保存为 NetCDF 文件。
+
+模型训练：
+2. 加载瓦片数据集（ModisGlobalTilesDataset）：
+   - 读取瓦片文件，提取云属性数据和云掩码。
+   - 对数据进行标准化和预处理。
+
+3. 定义卷积自编码器模型（ConvAutoEncoder）：
+   - 初始化编码器和解码器。
+   - 设置模型的参数（通道数、潜在空间维度等）。
+
+4. 训练过程：
+   - 使用 DataLoader 加载数据，按批次训练模型。
+   - 前向传播：
+     - 输入瓦片数据，经过编码器，得到潜在空间特征向量。
+     - 潜在空间特征向量经过解码器，重构出瓦片数据。
+   - 计算损失：
+     - 比较原始瓦片和重构瓦片，计算重构误差（MSE）。
+   - 反向传播：
+     - 计算梯度，更新模型参数。
+
+5. 保存训练好的模型参数（.pt 文件）。
+
+特征提取和云底高度预测：
+6. 加载训练好的自编码器模型和瓦片数据集。
+
+7. 特征提取：
+   - 使用自编码器的编码器部分，对瓦片数据进行编码，提取潜在空间特征向量。
+
+8. 准备云底高度标签：
+   - 从数据集中获取对应的云底高度（CBH）真实值。
+   - 将连续的 CBH 值映射到离散的类别。
+
+9. 训练序数回归模型：
+   - 使用提取的特征向量和 CBH 类别标签，训练序数回归模型（mord.LogisticAT）。
+
+10. 保存序数回归模型（.joblib 文件）。
+
+预测过程：
+11. 对新的瓦片数据，使用自编码器提取特征。
+
+12. 使用训练好的序数回归模型，预测云底高度类别。
+
+13. 将预测的类别映射回实际的云底高度值。
+
+14. 可视化和评估预测结果。
+
+
+
+
+# 运行过程的步骤解析.py
+
+步骤 1：数据准备
+
+    目标：从 MODIS 卫星数据中提取云属性瓦片，供模型训练和预测使用。
+    主要函数：
+        sample_tiles_swath：从卫星条带文件中采样瓦片。
+        get_channels_cloud_mask：读取云属性通道和云掩码。
+        extract_cloudy_tiles_swath：提取云量高于阈值的瓦片。
+步骤 2：数据预处理
+
+    目标：对瓦片数据进行标准化和裁剪，准备输入模型。
+    主要类和函数：
+        ModisGlobalTilesDataset：PyTorch 数据集类，用于加载和预处理瓦片数据。
+        standardize_channel：对云属性通道进行标准化。
+步骤 3：模型定义
+
+    目标：定义卷积自编码器模型的结构。
+    主要类：
+        ConvAutoEncoder：自编码器模型类，包含编码器和解码器。
+步骤 4：模型训练
+
+    目标：训练自编码器模型，学习瓦片数据的特征表示。
+    训练过程：
+        使用 DataLoader 加载数据，按批次训练模型。
+        定义损失函数（MSE）和优化器（Adam）。
+        在每个 epoch 中，进行前向传播、计算损失、反向传播和参数更新。
+        定期保存模型检查点。
+步骤 5：特征提取
+
+    目标：使用训练好的自编码器模型，对瓦片数据进行编码，提取特征向量。
+    主要步骤：
+        加载自编码器模型参数。
+        将瓦片数据输入编码器，获取潜在空间特征向量。
+步骤 6：云底高度预测模型训练
+
+    目标：使用提取的特征向量和云底高度标签，训练序数回归模型。
+    主要步骤：
+        准备云底高度类别标签。
+        定义并训练序数回归模型（mord.LogisticAT）。
+    保存训练好的模型。
+步骤 7：预测和评估
+
+    目标：对新的瓦片数据进行云底高度预测，并评估模型性能。
+    主要步骤：
+        使用自编码器提取特征。
+        使用序数回归模型预测云底高度类别。
+        将类别映射回实际高度值。
+        可视化预测结果，计算评估指标。
+
+
+
+
+
+
+
+# means_stds_save.txt 文件的结构解析
+该文件包含以下几行数据，每行代表不同的统计量：
+
+第一行：运行时间和其他注释。
+第二行：通道名称（例如，云顶压力、云顶高度等）。
+第三行：每个通道的均值（Mean），用于数据中心化。
+第四行：每个通道的标准差（Standard deviation），用于数据缩放。
+第五行：每个通道的最小值（Minimum），可能用于数据清洗或边界条件判断。
+第六行：每个通道的最大值（Maximum），可能用于数据清洗或边界条件判断。
+第七行：对数变换后的均值（Means_log），用于对数变换后的数据中心化。
+第八行：对数变换后的标准差（Stds_log），用于对数变换后的数据缩放。
+
+
+
+

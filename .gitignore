@@ -3,3 +3,17 @@ data/
 
 # 忽略 plots 文件夹中的所有 .png 文件
 plots/*.png
+
+# 忽略所有 .pyc 文件
+*.pyc
+
+# 忽略所有 .pt 文件
+*.pt
+
+# 忽略 __pycache__ 文件夹
+__pycache__/
+
+# 忽略 .ipynb_checkpoints 文件夹
+.ipynb_checkpoints/
+
+
