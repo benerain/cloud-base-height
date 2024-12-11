@@ -262,7 +262,7 @@ def extract_cloudy_tiles_swath(
 
 	positions, centers, centers_lat_lon, tiles, cbh_values, cbh_values_center = [], [], [], [], [], []
 
-	for center in tile_centers:
+	for center in tile_centers:   # 以中心点为中心，提取大小为 tile_size 的瓦片，并检查其云覆盖度和缺失值比例。
 
 		center_w, center_h = center
 

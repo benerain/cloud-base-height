@@ -32,6 +32,22 @@ def conv1_1_transpose(in_channels, out_channels, stride=1):
     """1x1 转置卷积"""
     return nn.ConvTranspose2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False)
 
+
+
+# 参数解释：
+
+# 	•	inplanes：输入的通道数。
+# 	•	planes：输出的通道数，也就是每一层卷积生成的特征图数。
+# 	•	stride：卷积层的步长，默认为1，通常用来控制特征图的尺寸变化。
+# 	•	norm_layer：归一化层的类型，默认使用 nn.BatchNorm2d，有助于加速训练和稳定网络
+# 	1.	问题1：为什么需要三次卷积？
+# •	使用多次卷积层能够逐步提取更复杂、更高层次的特征，从而更好地表示输入数据。
+#  2.	问题2：为什么在 conv3 后添加 Batch Normalization？
+#  •	卷积操作会改变特征的分布，Batch Normalization 能够标准化每批数据，减少网络中间层的变化（称为内部协变量偏移），从而提高模型训练的稳定性和速度。
+#  3.	问题3：为什么使用最大池化进行下采样？
+# •	最大池化通过提取局部区域的最大值来保留主要特征，同时有效减少特征图的尺寸，从而降低计算量。
+# 4.	问题4：LeakyReLU 比标准的 ReLU 有什么优势？
+# •	LeakyReLU 允许负值通过（乘以一个小斜率），避免标准 ReLU 中“死神经元”问题（当输入为负时，梯度完全为零）。。
 # 卷积块定义
 class ConvBlock(nn.Module):
     """卷积块 => 下采样"""
@@ -51,6 +67,9 @@ class ConvBlock(nn.Module):
         x = self.leakyrelu(self.bn(self.conv3(x)))
         x = self.maxpool(x)
         return x
+
+
+
 
 class ConvTransposeBlock(nn.Module):
     """转置卷积块 => 上采样"""
@@ -141,3 +160,8 @@ class ConvAutoEncoder(nn.Module):
     def decode(self, z):
         output = self.decoder(self.decoder_input(z))
         return self.final_actfunc(output) if self.final_actfunc else output
+
+
+
+    #   latent_dim 越小，模型压缩得越多，编码器提取的特征越有限，可能丢失信息。
+	#  	latent_dim 越大，潜在空间越灵活，能保留更多信息，但可能导致过拟合。
