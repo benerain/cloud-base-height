@@ -9,6 +9,7 @@ plots/*.png
 
 # 忽略所有 .pt 文件
 *.pt
+*.swp
 
 # 忽略 __pycache__ 文件夹
 __pycache__/
@@ -17,3 +18,4 @@ __pycache__/
 .ipynb_checkpoints/
 
 
+log/

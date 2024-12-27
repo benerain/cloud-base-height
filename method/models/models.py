@@ -302,6 +302,78 @@ class ConvAutoEncoder_old(nn.Module):
                  input_grid_size=128,
                  only_eval=False,
                  latent_dim=256):
+        super(ConvAutoEncoder_old, self).__init__()
+
+        self.n_channels = n_channels
+        self.input_grid_size = input_grid_size
+        # self.only_eval = only_eval
+        self.latent_dim = latent_dim
+
+        self.encoder = Encoder(n_channels=self.n_channels)
+
+        # self.unflat_size = self.encoder.get_last_dim((self.n_channels,
+        #                                               self.input_grid_size,
+        #                                               self.input_grid_size))
+        self.unflat_size = (256, 2, 2)
+        self.model_dim = np.prod(self.unflat_size)
+
+        # latent space distributions
+        self.latent_space = nn.Linear(self.model_dim, self.latent_dim)
+
+        self.decoder_input = nn.Linear(self.latent_dim, self.model_dim)
+        self.decoder = Decoder(n_channels=self.n_channels,
+                               unflat_size=self.unflat_size)
+
+        self.final_actfunc = None
+
+        self.__name__ = 'autoencoder_' + '_'.join([str(dim) for dim in self.unflat_size])
+
+    def forward(self, x):
+
+        encoded = self.encode(x)
+
+        decoded = self.decode(encoded)
+
+        return encoded, decoded
+
+    def encode(self, input):
+        """
+        Encodes the input through encoder network.
+        :param input:
+        :return:
+        """
+        # Feed input through encoder network
+        output = self.encoder(input) #output shape (N,256,16,16)
+        output = torch.flatten(output, start_dim=1)
+        output = self.latent_space(output)
+        return output
+
+    def decode(self, z):
+        """
+        Decodes the given latent encoding onto input space.
+        :param z:
+        :return:
+        """
+        # Feed latent encoding through decoder network
+        output = self.decoder_input(z)
+        output = self.decoder(output)
+        if self.final_actfunc is not None:
+            output = self.final_actfunc(output)
+        return output
+
+# endregion
+
+
+
+class ConvAutoEncoder(nn.Module):
+    """
+    Convolutional Auto-Encoder pytorch model class.
+    """
+    def __init__(self,
+                 n_channels=3,
+                 input_grid_size=128,
+                 only_eval=False,
+                 latent_dim=256):
         super(ConvAutoEncoder, self).__init__()
 
         self.n_channels = n_channels
@@ -364,64 +436,62 @@ class ConvAutoEncoder_old(nn.Module):
 # endregion
 
 
+# # 新的 ConvAutoEncoder 类，包含跳跃连接
+# class ConvAutoEncoder(nn.Module):
+#     def __init__(self, n_channels=3, input_grid_size=128, latent_dim=256):
+#         super(ConvAutoEncoder, self).__init__()
 
+#         self.n_channels = n_channels
+#         self.input_grid_size = input_grid_size
+#         self.latent_dim = latent_dim
 
-# 新的 ConvAutoEncoder 类，包含跳跃连接
-class ConvAutoEncoder(nn.Module):
-    def __init__(self, n_channels=3, input_grid_size=128, latent_dim=256):
-        super(ConvAutoEncoder, self).__init__()
+#         # Encoder layers with skip connections
+#         self.encoder_conv1 = nn.Conv2d(n_channels, 64, kernel_size=3, padding=1)
+#         self.encoder_conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+#         self.encoder_conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+#         self.encoder_conv4 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+#         self.pool = nn.MaxPool2d(2, 2)
 
-        self.n_channels = n_channels
-        self.input_grid_size = input_grid_size
-        self.latent_dim = latent_dim
+#         # Bottleneck
+#         self.bottleneck = nn.Conv2d(512, latent_dim, kernel_size=3, padding=1)
 
-        # Encoder layers with skip connections
-        self.encoder_conv1 = nn.Conv2d(n_channels, 64, kernel_size=3, padding=1)
-        self.encoder_conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.encoder_conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.encoder_conv4 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
+#         # Decoder layers with skip connections
+#         self.upconv4 = nn.ConvTranspose2d(latent_dim, 512, kernel_size=2, stride=2)
+#         self.decoder_conv4 = nn.Conv2d(1024, 512, kernel_size=3, padding=1)
+#         self.upconv3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+#         self.decoder_conv3 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
+#         self.upconv2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+#         self.decoder_conv2 = nn.Conv2d(256, 128, kernel_size=3, padding=1)
+#         self.upconv1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+#         self.decoder_conv1 = nn.Conv2d(128, n_channels, kernel_size=3, padding=1)
 
-        # Bottleneck
-        self.bottleneck = nn.Conv2d(512, latent_dim, kernel_size=3, padding=1)
+#         self.relu = nn.ReLU()
 
-        # Decoder layers with skip connections
-        self.upconv4 = nn.ConvTranspose2d(latent_dim, 512, kernel_size=2, stride=2)
-        self.decoder_conv4 = nn.Conv2d(1024, 512, kernel_size=3, padding=1)
-        self.upconv3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
-        self.decoder_conv3 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
-        self.upconv2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
-        self.decoder_conv2 = nn.Conv2d(256, 128, kernel_size=3, padding=1)
-        self.upconv1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
-        self.decoder_conv1 = nn.Conv2d(128, n_channels, kernel_size=3, padding=1)
+#     def forward(self, x):
+#         # Encoder with skip connections
+#         e1 = self.relu(self.encoder_conv1(x))
+#         e2 = self.relu(self.encoder_conv2(self.pool(e1)))
+#         e3 = self.relu(self.encoder_conv3(self.pool(e2)))
+#         e4 = self.relu(self.encoder_conv4(self.pool(e3)))
 
-        self.relu = nn.ReLU()
+#         # Bottleneck
+#         b = self.relu(self.bottleneck(self.pool(e4)))
 
-    def forward(self, x):
-        # Encoder with skip connections
-        e1 = self.relu(self.encoder_conv1(x))
-        e2 = self.relu(self.encoder_conv2(self.pool(e1)))
-        e3 = self.relu(self.encoder_conv3(self.pool(e2)))
-        e4 = self.relu(self.encoder_conv4(self.pool(e3)))
+#         # Decoder with skip connections
+#         d4 = self.upconv4(b)
+#         d4 = torch.cat((d4, e4), dim=1)
+#         d4 = self.relu(self.decoder_conv4(d4))
 
-        # Bottleneck
-        b = self.relu(self.bottleneck(self.pool(e4)))
+#         d3 = self.upconv3(d4)
+#         d3 = torch.cat((d3, e3), dim=1)
+#         d3 = self.relu(self.decoder_conv3(d3))
 
-        # Decoder with skip connections
-        d4 = self.upconv4(b)
-        d4 = torch.cat((d4, e4), dim=1)
-        d4 = self.relu(self.decoder_conv4(d4))
+#         d2 = self.upconv2(d3)
+#         d2 = torch.cat((d2, e2), dim=1)
+#         d2 = self.relu(self.decoder_conv2(d2))
 
-        d3 = self.upconv3(d4)
-        d3 = torch.cat((d3, e3), dim=1)
-        d3 = self.relu(self.decoder_conv3(d3))
+#         d1 = self.upconv1(d2)
+#         d1 = torch.cat((d1, e1), dim=1)
+#         d1 = self.decoder_conv1(d1)  # 最后一层不使用激活函数
 
-        d2 = self.upconv2(d3)
-        d2 = torch.cat((d2, e2), dim=1)
-        d2 = self.relu(self.decoder_conv2(d2))
-
-        d1 = self.upconv1(d2)
-        d1 = torch.cat((d1, e1), dim=1)
-        d1 = self.decoder_conv1(d1)  # 最后一层不使用激活函数
-
-        return d1
+#         return d1

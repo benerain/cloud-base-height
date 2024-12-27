@@ -85,7 +85,7 @@ def main():
     # 初始化模型
     n_channels = 3
     input_grid_size = 128
-    latent_dim = 128
+    latent_dim =512
     layer_channels = [32, 128, 256] 
     n_residual_blocks = 3
     model = ConvAutoEncoder(n_channels=n_channels, 
@@ -128,14 +128,14 @@ def main():
 
         # 每10个epoch保存模型
         if (epoch + 1) % 50 == 0:
-            checkpoint_path = os.path.join(model_save_dir, f"ae_ocean_savecheckpoint_latent_mytrain{epoch + 1}.pt")
+            checkpoint_path = os.path.join(model_save_dir, f"ae_ocean_savecheckpoint_latent512_mytrain{epoch + 1}.pt")
             torch.save(model.state_dict(), checkpoint_path)
 
         # 打印性能分析结果
         #print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 
     # 保存最终模型
-    final_model_path = os.path.join(model_save_dir, 'ae_ocean_savecheckpoint_latent_mytrain.pt')
+    final_model_path = os.path.join(model_save_dir, 'ae_ocean_savecheckpoint_latent512_mytrain.pt')
     torch.save(model.state_dict(), final_model_path)
     print('训练完成，模型已保存至', final_model_path)
 
