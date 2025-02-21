@@ -98,14 +98,14 @@ class FYGlobalTilesDataset(Dataset):
 
 	def __init__(self, ddir, ext, tile=None, subset=None, subset_cols=None,
 	             transform=None, log_transform=False, normalize=False, mean=None, std=None,min=None,
-	             subscale=False, grid_size=None, get_calipso_cbh=False):
+	             subscale=False, grid_size=None, get_ground_cbh=False):
 		"""
 
         :param ddir: 存放瓦片文件的目录。
         :param ext: 文件扩展名（例如 "nc"）。
         :param tile: 文件名前缀（默认为 "tile"）。
         :param subset: 是否仅使用部分通道（例如 0,1,2,...）。
-        :param subset_cols: 使用的通道名称列表，例如 ['cloud_top_height', 'cloud_optical_thickness', 'cloud_water_path']。
+        :param subset_cols: 使用的通道名称列表，
         :param transform: 应用于样本数据的 pytorch 转换。
         :param log_transform: 是否对部分通道（如 COT、CWP）进行对数变换。
         :param normalize: 是否对通道数据进行归一化。
@@ -114,7 +114,7 @@ class FYGlobalTilesDataset(Dataset):
         :param min: 各通道最小值（归一化时用）。
         :param subscale: 是否对子瓦片进行尺寸缩放。
         :param grid_size: 瓦片尺寸（如 128）。
-        :param get_calipso_cbh: 是否加载额外的云底高度信息。
+        :param get_ground_cbh: 是否加载额外的云底高度信息。
 		"""
 		# Directory with tiles files
 		self.ddir = ddir
@@ -130,12 +130,13 @@ class FYGlobalTilesDataset(Dataset):
 		# Define parameters to transform of input data
 		self.subscale = subscale
 		self.grid_size = grid_size
+
 		self.normalize = normalize
 		self.mean = mean
 		self.std = std
 		self.min = min
 		self.log_transform = log_transform
-		self.get_calipso_cbh = get_calipso_cbh
+		self.get_ground_cbh = get_ground_cbh
 		self.file_paths = glob.glob(os.path.join(self.ddir, self.tile + '*.' + self.ext))
 		self.file_paths.sort()
 
@@ -152,27 +153,31 @@ class FYGlobalTilesDataset(Dataset):
 
 	def __getitem__(self, idx):
 
+		# 如果传入的索引 idx 是一个 PyTorch 张量（tensor），则将其转换为 Python 列表，以便后续用作列表索引。
 		if torch.is_tensor(idx):
 			idx = idx.tolist()
 
+		# 获取文件名和 ID
 		filename = self.file_paths[idx]
-		id = os.path.basename(filename)
+		id = os.path.basename(filename) 
 
 		data = read_nc(filename=filename)
+
+		# 设置了只提取部分通道
 		if self.subset:
 			grid_values = np.array(data[self.subset_cols].to_array().values)
 		else:
 			grid_values = np.array(data.to_array().values)
 		
-		# 获取 Cloud_Mask：首先检查 tile 是否存在 'cloud_mask'，否则使用 nc 中的 'CLM'
+		# 从数据中提取名为 'CLM' 的变量（云掩膜数据），并转换成 NumPy 数组。
 		cld_mask = np.array(data['CLM'].values)
 		# Get center
 		center = np.array(data['center'].values)
 
 		# Get cloud base height from calipso/cloudsat retrievals
-		if self.get_calipso_cbh:
-			calipso_cbh = np.array(data['cloud_base_height'].values)
-			calipso_cbh_center = np.array(data['cloud_base_height_center'].values)
+		if self.get_ground_cbh:
+			ground_cbh = np.array(data['cloud_base_height'].values)
+			ground_cbh_center = np.array(data['cloud_base_height_center'].values)
 
 		# 如果需要对子瓦片进行尺寸缩放
 		if self.subscale:
@@ -186,8 +191,8 @@ class FYGlobalTilesDataset(Dataset):
 		          'cld_mask': cld_mask.astype(int),
 		          'center': center.astype(np.float64),
 		          'id': id,
-		          'calipso_cbh': calipso_cbh.astype(np.float64) if self.get_calipso_cbh else -1,
-		          'calipso_cbh_center': calipso_cbh_center.astype(np.float64) if self.get_calipso_cbh else -1}
+		          'ground_cbh': ground_cbh.astype(np.float64) if self.get_ground_cbh else -1,
+		          'ground_cbh_center': ground_cbh_center.astype(np.float64) if self.get_ground_cbh else -1}
 
 		if self.transform:
 			sample['data'] = self.transform(sample['data'])
