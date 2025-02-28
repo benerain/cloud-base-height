@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 import io
 from contextlib import redirect_stdout
-from torchinfo import summary
+# from torchinfo import summary
 
 # region Convolution layers
 

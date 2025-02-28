@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from method.utils.FYutils import FYGlobalTilesDataset
 
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -679,7 +680,7 @@ def tile_predict_cbh(ddir, tile_names, ae_model, or_model, means_stds_file, verb
 
 
 
-class CloudBaseHeightPrediction:
+class FYCloudBaseHeightPrediction:
 	"""
 	Method wrapper for the cloud base height prediction from cloud properties.
 
